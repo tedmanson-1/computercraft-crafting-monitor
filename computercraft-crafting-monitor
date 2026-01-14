@@ -1,0 +1,60 @@
+-- AE2 Active Crafting Monitor
+-- ATM10 / Advanced Peripherals (ME Bridge)
+
+local me = peripheral.find("me_bridge")
+if not me then
+  error("No ME Bridge found!")
+end
+
+local function draw()
+  term.clear()
+  term.setCursorPos(1, 1)
+
+  print("AE2 Active Crafting Jobs")
+  print("------------------------")
+
+  local cpus = me.getCraftingCPUs()
+  local activeCPUs = 0
+
+  if not cpus or #cpus == 0 then
+    print("No crafting CPUs found.")
+    return
+  end
+
+  for _, cpu in ipairs(cpus) do
+    if cpu.isBusy then
+      activeCPUs = activeCPUs + 1
+
+      local job = cpu.currentCrafting
+
+      if job then
+        local item = job.item or {}
+        local name = item.displayName or item.name or "Unknown Item"
+
+        print(name)
+        print("  Progress: " .. math.floor((job.progress or 0) * 100) .. "%")
+
+        if job.total then
+          print("  Amount: " .. (job.done or 0) .. " / " .. job.total)
+        end
+      else
+        -- CPU busy but job info not yet available
+        print("Crafting job starting...")
+      end
+
+      print("")
+    end
+  end
+
+  if activeCPUs == 0 then
+    print("No active crafting jobs.")
+  end
+
+  print("Active CPUs: " .. activeCPUs)
+end
+
+-- Refresh every 2 seconds
+while true do
+  draw()
+  sleep(2)
+end
