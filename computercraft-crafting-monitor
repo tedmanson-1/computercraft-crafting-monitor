@@ -2,7 +2,7 @@ local bridge = peripheral.wrap("bottom")
 local monitor = peripheral.find("monitor")
 
 if not bridge then error("ME Bridge not found on BOTTOM side!") end
-if not monitor then error("Monitor not found!") end
+if not monitor then error("Monitor not found! Check connections.") end
 
 monitor.setTextScale(0.5)
 
@@ -22,18 +22,19 @@ function updateDisplay()
       activeJobs = activeJobs + 1
       local job = cpu.craftingJob
       
-      -- 2026 FIX: The 'item' table contains the metadata
+      -- TARGETING YOUR DEBUG VARIABLES:
+      -- Details are inside 'job.item' in modern versions
       local item = job.item or {}
       
-      -- FIX: displayName and count are the standard 1.21 keys
-      local name = item.displayName or item.label or "Unknown Item"
+      -- Using 'displayName' and 'count' as found in your debug
+      local name = item.displayName or "Unknown Item"
       local qty = job.count or item.count or 0
       
       monitor.setCursorPos(1, y)
       monitor.setTextColor(colors.white)
       monitor.write(string.format("%s x%d", name, qty))
       
-      -- Optional: Display CPU storage/name
+      -- Show CPU identification (anvil-named or default)
       monitor.setCursorPos(1, y + 1)
       monitor.setTextColor(colors.gray)
       local cpuName = cpu.name or "CPU " .. i
@@ -50,7 +51,10 @@ function updateDisplay()
   end
 end
 
+-- Main update loop
 while true do
-  pcall(updateDisplay)
+  -- pcall prevents "hiccups" from crashing the script during data sync
+  local ok, err = pcall(updateDisplay)
+  if not ok then print("Sync error: " .. tostring(err)) end
   sleep(1)
 end
