@@ -1,60 +1,51 @@
 local bridge = peripheral.wrap("bottom")
 local monitor = peripheral.find("monitor")
 
-if not bridge then error("ME Bridge not found on BOTTOM side!") end
-if not monitor then error("Monitor not found! Check connections.") end
+if not bridge then error("ME Bridge not found on BOTTOM!") end
+if not monitor then error("Monitor not found!") end
 
 monitor.setTextScale(0.5)
 
-function updateDisplay()
-  monitor.clear()
-  monitor.setCursorPos(1, 1)
-  monitor.setTextColor(colors.yellow)
-  monitor.write("--- AE2 Active Crafting ---")
-  
-  local cpus = bridge.getCraftingCPUs()
-  local y = 3
-  local activeJobs = 0
-
-  for i, cpu in ipairs(cpus) do
-    -- check if the CPU is working
-    if cpu.isBusy and cpu.craftingJob then
-      activeJobs = activeJobs + 1
-      local job = cpu.craftingJob
-      
-      -- TARGETING YOUR DEBUG VARIABLES:
-      -- Details are inside 'job.item' in modern versions
-      local item = job.item or {}
-      
-      -- Using 'displayName' and 'count' as found in your debug
-      local name = item.displayName or "Unknown Item"
-      local qty = job.count or item.count or 0
-      
-      monitor.setCursorPos(1, y)
-      monitor.setTextColor(colors.white)
-      monitor.write(string.format("%s x%d", name, qty))
-      
-      -- Show CPU identification (anvil-named or default)
-      monitor.setCursorPos(1, y + 1)
-      monitor.setTextColor(colors.gray)
-      local cpuName = cpu.name or "CPU " .. i
-      monitor.write(string.format("  [%s] %dK Storage", cpuName, math.floor((cpu.storage or 0)/1024)))
-      
-      y = y + 3
+-- Deep search function to find values in the messy AE2 tables
+local function findValue(tbl, key)
+    if type(tbl) ~= "table" then return nil end
+    if tbl[key] then return tbl[key] end
+    for _, v in pairs(tbl) do
+        local res = findValue(v, key)
+        if res then return res end
     end
-  end
-
-  if activeJobs == 0 then
-    monitor.setCursorPos(1, 3)
-    monitor.setTextColor(colors.red)
-    monitor.write("No active jobs.")
-  end
+    return nil
 end
 
--- Main update loop
+function updateDisplay()
+    monitor.clear()
+    monitor.setCursorPos(1, 1)
+    monitor.setTextColor(colors.yellow)
+    monitor.write("--- AE2 Active Crafting ---")
+    
+    local cpus = bridge.getCraftingCPUs()
+    local y = 3
+
+    for i, cpu in ipairs(cpus) do
+        if cpu.isBusy and cpu.craftingJob then
+            -- Directly extract the variables from the nested job table
+            local name = findValue(cpu.craftingJob, "displayName") or "Unknown Item"
+            local qty = findValue(cpu.craftingJob, "count") or findValue(cpu.craftingJob, "amount") or 0
+            
+            monitor.setCursorPos(1, y)
+            monitor.setTextColor(colors.white)
+            monitor.write(string.format("%s x%d", name, qty))
+            
+            -- CPU ID
+            monitor.setCursorPos(1, y + 1)
+            monitor.setTextColor(colors.gray)
+            monitor.write(string.format("  [%s]", cpu.name or "CPU " .. i))
+            y = y + 3
+        end
+    end
+end
+
 while true do
-  -- pcall prevents "hiccups" from crashing the script during data sync
-  local ok, err = pcall(updateDisplay)
-  if not ok then print("Sync error: " .. tostring(err)) end
-  sleep(1)
+    pcall(updateDisplay)
+    sleep(1)
 end
