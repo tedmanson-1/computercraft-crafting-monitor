@@ -66,11 +66,9 @@ function updateDisplay()
             monitor.setTextColor(colors.white)
             monitor.write(": ")
             monitor.setTextColor(colors.green)
-            monitor.write(currentQty .. " left")
+            monitor.write(currentQty .. " Crafting")
             
-            -- Draw bar using remembered total
-            drawProgressBar(y + 1, currentQty, startCounts[jobID])
-            y = y + 3
+			y = y + 3
         end
     end
 
