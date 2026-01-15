@@ -1,10 +1,9 @@
 local bridge = peripheral.wrap("bottom")
 local monitor = peripheral.find("monitor")
-
 monitor.setTextScale(0.5)
-local startCounts = {} -- Memory to track progress
 
--- Deep search for 2026 AE2 data structures
+local startCounts = {} -- Store initial counts in memory
+
 local function findValue(tbl, key)
     if type(tbl) ~= "table" then return nil end
     if tbl[key] then return tbl[key] end
@@ -16,7 +15,11 @@ local function findValue(tbl, key)
 end
 
 function drawProgressBar(y, current, total)
-    local width = 15 
+    local width = 15
+    -- Ensure total is never 0 to avoid math errors
+    if not total or total <= 0 then total = current end
+    
+    -- AE2 counts DOWN. Progress = (Total - Remaining) / Total
     local percent = math.max(0, math.min(1, (total - current) / total))
     local filled = math.floor(percent * width)
     
@@ -47,34 +50,35 @@ function updateDisplay()
             local name = findValue(job, "displayName") or "Unknown"
             local currentQty = findValue(job, "count") or findValue(job, "amount") or 0
             
-            -- Track initial count for progress
-            local jobID = (cpu.name or i) .. name
+            -- Stable ID using the Item Name + CPU Index
+            local jobID = name .. "_" .. i
             activeIDs[jobID] = true
-            if not startCounts[jobID] or currentQty > startCounts[jobID] then
+            
+            -- ONLY set the start count if we haven't seen this job before
+            if not startCounts[jobID] then
                 startCounts[jobID] = currentQty
             end
 
-            -- Display Name in BLUE
+            -- Display: Blue Name, Green Count
             monitor.setCursorPos(1, y)
             monitor.setTextColor(colors.blue)
             monitor.write(name)
-            
-            -- Display Count in GREEN (placed after the name)
             monitor.setTextColor(colors.white)
             monitor.write(": ")
             monitor.setTextColor(colors.green)
             monitor.write(currentQty .. " left")
             
-            -- Draw the Progress Bar on the next line
+            -- Draw bar using remembered total
             drawProgressBar(y + 1, currentQty, startCounts[jobID])
-            
             y = y + 3
         end
     end
 
-    -- Cleanup finished jobs
+    -- Cleanup: Remove jobs from memory that are no longer crafting
     for id, _ in pairs(startCounts) do
-        if not activeIDs[id] then startCounts[id] = nil end
+        if not activeIDs[id] then
+            startCounts[id] = nil
+        end
     end
 end
 
