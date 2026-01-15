@@ -1,9 +1,11 @@
+-- Initializing peripherals using specific side
 local bridge = peripheral.wrap("bottom") 
 local monitor = peripheral.find("monitor")
 
-if not bridge then error("ME Bridge not found!") end
-if not monitor then error("Monitor not found!") end
+if not bridge then error("ME Bridge not found on BOTTOM side!") end
+if not monitor then error("Monitor not found! (Is it connected?)") end
 
+-- Formatting
 monitor.setTextScale(0.5)
 local refreshRate = 2
 
@@ -18,23 +20,24 @@ function updateDisplay()
     local activeJobs = 0
 
     for i, cpu in ipairs(cpus) do
-        -- Safety check: Ensure both isBusy and the job data exist
+        -- Check if CPU is busy and has a valid crafting job
         if cpu.isBusy and cpu.craftingJob then
             activeJobs = activeJobs + 1
+            local job = cpu.craftingJob
             
-            -- Fallback values if name or amount are missing
-            local jobName = cpu.craftingJob.name or "Unknown Item"
-            local jobAmount = cpu.craftingJob.amount or 0
+            -- Try common 2026 field names for item display
+            local itemName = job.displayName or job.label or job.name or "Unknown Item"
+            local itemAmount = job.amount or job.count or 0
             
             monitor.setCursorPos(1, y)
             monitor.setTextColor(colors.white)
-            monitor.write(string.format("%s x%d", jobName, jobAmount))
+            monitor.write(string.format("%s x%d", itemName, itemAmount))
             
-            -- Show CPU status
-            local storage = cpu.storage or 0
+            -- Optional CPU Info
             monitor.setCursorPos(1, y + 1)
             monitor.setTextColor(colors.gray)
-            monitor.write(string.format("  CPU: %dK", math.floor(storage / 1024)))
+            local cpuName = cpu.name or "CPU " .. i
+            monitor.write(string.format("  [%s]", cpuName))
             
             y = y + 3
         end
@@ -47,13 +50,12 @@ function updateDisplay()
     end
 end
 
+-- Main Loop
 while true do
-    -- Wrap in pcall to prevent the whole program from crashing on a minor error
-    local success, err = pcall(updateDisplay)
-    if not success then
-        monitor.clear()
-        monitor.setCursorPos(1,1)
-        monitor.write("Error: " .. tostring(err))
+    -- Using pcall to prevent crashing on data-sync hiccups
+    local ok, err = pcall(updateDisplay)
+    if not ok then
+        print("Error: " .. tostring(err))
     end
     sleep(refreshRate)
 end
