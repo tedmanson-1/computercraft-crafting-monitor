@@ -1,44 +1,53 @@
-local bridge = peripheral.wrap("bottom") 
+local bridge = peripheral.wrap("bottom")
 local monitor = peripheral.find("monitor")
 
-if not bridge then error("ME Bridge not found on BOTTOM!") end
-if not monitor then error("Monitor not found! Use a modem or place next to computer.") end
+if not bridge then error("ME Bridge not found on BOTTOM side!") end
+if not monitor then error("Monitor not found! Check connections.") end
 
 monitor.setTextScale(0.5)
-local refreshRate = 2
+local refreshRate = 1
+
+-- This function looks through all possible keys to find a name
+local function getName(obj)
+    if not obj then return "Unknown" end
+    -- Check common 2026 fields
+    local name = obj.displayName or obj.label or obj.name or obj.item
+    
+    -- If 'name' is still a table (nested item), check inside it
+    if type(name) == "table" then
+        return name.displayName or name.label or name.name or "Unknown Item"
+    end
+    
+    return name or "Unknown Item"
+end
 
 function updateDisplay()
     monitor.clear()
     monitor.setCursorPos(1, 1)
     monitor.setTextColor(colors.yellow)
-    monitor.write("--- AE2 Active Crafting Jobs ---")
+    monitor.write("--- AE2 Crafting Status ---")
     
     local cpus = bridge.getCraftingCPUs()
     local y = 3
     local activeJobs = 0
 
     for i, cpu in ipairs(cpus) do
-        -- Only process CPUs that are currently crafting
         if cpu.isBusy and cpu.craftingJob then
             activeJobs = activeJobs + 1
-            local job = cpu.craftingJob
             
-            -- 2026 Deep-Search for Item Name:
-            -- Checks job.item.displayName, job.displayName, job.item.label, etc.
-            local details = job.item or job
-            local itemName = details.displayName or job.displayName or details.label or details.name or "Unknown Item"
-            local itemAmount = job.amount or job.count or 0
+            -- Get readable name using the deep-search function
+            local itemName = getName(cpu.craftingJob)
+            local itemAmount = cpu.craftingJob.amount or cpu.craftingJob.count or 0
             
-            -- Displaying the results
             monitor.setCursorPos(1, y)
             monitor.setTextColor(colors.white)
             monitor.write(string.format("%s x%d", itemName, itemAmount))
             
-            -- Sub-text for CPU info
+            -- CPU Info (named in Anvil or default)
             monitor.setCursorPos(1, y + 1)
             monitor.setTextColor(colors.gray)
             local cpuName = cpu.name or "CPU " .. i
-            monitor.write(string.format("  [%s] - %dK Storage", cpuName, math.floor((cpu.storage or 0) / 1024)))
+            monitor.write(string.format("  [%s] %dK", cpuName, math.floor((cpu.storage or 0)/1024)))
             
             y = y + 3
         end
@@ -47,6 +56,11 @@ function updateDisplay()
     if activeJobs == 0 then
         monitor.setCursorPos(1, 3)
         monitor.setTextColor(colors.red)
-        monitor.write("No active jobs.")
+        monitor.write("No active crafting jobs.")
     end
+end
+
+while true do
+    pcall(updateDisplay)
+    sleep(refreshRate)
 end
