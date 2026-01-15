@@ -1,12 +1,10 @@
 local bridge = peripheral.wrap("bottom")
 local monitor = peripheral.find("monitor")
 
-if not bridge then error("ME Bridge not found on BOTTOM!") end
-if not monitor then error("Monitor not found!") end
-
 monitor.setTextScale(0.5)
+local startCounts = {} -- Memory to track progress
 
--- Deep search function to find values in the messy AE2 tables
+-- Deep search for 2026 AE2 data structures
 local function findValue(tbl, key)
     if type(tbl) ~= "table" then return nil end
     if tbl[key] then return tbl[key] end
@@ -17,6 +15,22 @@ local function findValue(tbl, key)
     return nil
 end
 
+function drawProgressBar(y, current, total)
+    local width = 15 
+    local percent = math.max(0, math.min(1, (total - current) / total))
+    local filled = math.floor(percent * width)
+    
+    monitor.setCursorPos(1, y)
+    monitor.setTextColor(colors.gray)
+    monitor.write("[")
+    monitor.setTextColor(colors.green)
+    monitor.write(string.rep("=", filled))
+    monitor.setTextColor(colors.black)
+    monitor.write(string.rep("-", width - filled))
+    monitor.setTextColor(colors.gray)
+    monitor.write("] " .. math.floor(percent * 100) .. "%")
+end
+
 function updateDisplay()
     monitor.clear()
     monitor.setCursorPos(1, 1)
@@ -25,23 +39,42 @@ function updateDisplay()
     
     local cpus = bridge.getCraftingCPUs()
     local y = 3
+    local activeIDs = {}
 
     for i, cpu in ipairs(cpus) do
         if cpu.isBusy and cpu.craftingJob then
-            -- Directly extract the variables from the nested job table
-            local name = findValue(cpu.craftingJob, "displayName") or "Unknown Item"
-            local qty = findValue(cpu.craftingJob, "count") or findValue(cpu.craftingJob, "amount") or 0
+            local job = cpu.craftingJob
+            local name = findValue(job, "displayName") or "Unknown"
+            local currentQty = findValue(job, "count") or findValue(job, "amount") or 0
             
+            -- Track initial count for progress
+            local jobID = (cpu.name or i) .. name
+            activeIDs[jobID] = true
+            if not startCounts[jobID] or currentQty > startCounts[jobID] then
+                startCounts[jobID] = currentQty
+            end
+
+            -- Display Name in BLUE
             monitor.setCursorPos(1, y)
-            monitor.setTextColor(colors.white)
-            monitor.write(string.format("%s x%d", name, qty))
+            monitor.setTextColor(colors.blue)
+            monitor.write(name)
             
-            -- CPU ID
-            monitor.setCursorPos(1, y + 1)
-            monitor.setTextColor(colors.gray)
-            monitor.write(string.format("  [%s]", cpu.name or "CPU " .. i))
+            -- Display Count in GREEN (placed after the name)
+            monitor.setTextColor(colors.white)
+            monitor.write(": ")
+            monitor.setTextColor(colors.green)
+            monitor.write(currentQty .. " left")
+            
+            -- Draw the Progress Bar on the next line
+            drawProgressBar(y + 1, currentQty, startCounts[jobID])
+            
             y = y + 3
         end
+    end
+
+    -- Cleanup finished jobs
+    for id, _ in pairs(startCounts) do
+        if not activeIDs[id] then startCounts[id] = nil end
     end
 end
 
