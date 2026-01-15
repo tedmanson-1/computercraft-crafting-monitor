@@ -17,24 +17,23 @@ function updateDisplay()
   local activeJobs = 0
 
   for i, cpu in ipairs(cpus) do
-    -- check if the CPU is actually working
+    -- check if the CPU is working
     if cpu.isBusy and cpu.craftingJob then
       activeJobs = activeJobs + 1
       local job = cpu.craftingJob
       
-      -- 2026 FIX: Data is nested in 'item' sub-table
-      -- If 'item' table is missing, fall back to 'job' level
-      local details = job.item or job
+      -- 2026 FIX: The 'item' table contains the metadata
+      local item = job.item or {}
       
-      -- Field Names: 'displayName' for text, 'count' for quantity
-      local itemName = details.displayName or details.label or details.name or "Unknown Item"
-      local itemCount = job.count or details.count or job.amount or 0
+      -- FIX: displayName and count are the standard 1.21 keys
+      local name = item.displayName or item.label or "Unknown Item"
+      local qty = job.count or item.count or 0
       
       monitor.setCursorPos(1, y)
       monitor.setTextColor(colors.white)
-      monitor.write(string.format("%s x%d", itemName, itemCount))
+      monitor.write(string.format("%s x%d", name, qty))
       
-      -- Optional: Progress Bar or CPU name
+      -- Optional: Display CPU storage/name
       monitor.setCursorPos(1, y + 1)
       monitor.setTextColor(colors.gray)
       local cpuName = cpu.name or "CPU " .. i
@@ -51,7 +50,6 @@ function updateDisplay()
   end
 end
 
--- Refresh loop
 while true do
   pcall(updateDisplay)
   sleep(1)
