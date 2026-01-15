@@ -1,51 +1,59 @@
 local bridge = peripheral.wrap("bottom")
 local monitor = peripheral.find("monitor")
-monitor.setTextScale(0.5)
 
-local startCounts = {} -- Memory for progress
+if not bridge then error("ME Bridge not found on BOTTOM side!") end
+if not monitor then error("Monitor not found!") end
+
+monitor.setTextScale(0.5)
+local startCounts = {} -- Memory to track progress
 
 function updateDisplay()
-    -- FORCED REFRESH: Re-pull all CPU data from the network
+    -- Re-fetch data every loop to ensure updates reflect
     local cpus = bridge.getCraftingCPUs()
     
     monitor.clear()
     monitor.setCursorPos(1, 1)
     monitor.setTextColor(colors.yellow)
-    monitor.write("--- AE2 Live Status ---")
+    monitor.write("--- AE2 Active Crafting ---")
     
     local y = 3
     local activeIDs = {}
 
     for i, cpu in ipairs(cpus) do
-        -- Only process CPUs that are actively working
+        -- Only process busy CPUs with valid job data
         if cpu.isBusy and cpu.craftingJob then
             local job = cpu.craftingJob
-            -- 2026 Path: Check job.item.count first, then job.count
             local itemData = job.item or {}
-            local name = itemData.displayName or "Unknown"
-            local current = job.count or itemData.count or 0
             
-            local id = name .. "_" .. i
-            activeIDs[id] = true
+            -- SAFE DATA EXTRACTION: Ensure we get strings/numbers, not tables
+            local rawName = itemData.displayName or job.displayName or itemData.label or "Unknown"
+            local name = tostring(rawName)
             
-            -- Lock in the starting count
-            if not startCounts[id] or current > (startCounts[id] or 0) then
-                startCounts[id] = current
+            local rawQty = job.count or itemData.count or job.amount or 0
+            local currentQty = tonumber(rawQty) or 0
+            
+            -- Unique ID for this specific CPU job
+            local jobID = name .. "_" .. i
+            activeIDs[jobID] = true
+            
+            -- Lock in the original count for the progress bar
+            if not startCounts[jobID] or currentQty > startCounts[jobID] then
+                startCounts[jobID] = currentQty
             end
 
-            -- Display Name (Blue) and Live Count (Green)
+            -- LINE 1: Display Name (BLUE) and Count (GREEN)
             monitor.setCursorPos(1, y)
             monitor.setTextColor(colors.blue)
             monitor.write(name)
             monitor.setTextColor(colors.white)
             monitor.write(": ")
             monitor.setTextColor(colors.green)
-            monitor.write(tostring(current) .. " left")
-
-            -- Draw Progress Bar
-            local total = startCounts[id]
+            monitor.write(tostring(currentQty) .. " left")
+            
+            -- LINE 2: Progress Bar Calculation
+            local total = startCounts[jobID] or currentQty
             local width = 15
-            local percent = (total > 0) and math.max(0, math.min(1, (total - current) / total)) or 0
+            local percent = (total > 0) and math.max(0, math.min(1, (total - currentQty) / total)) or 0
             local filled = math.floor(percent * width)
             
             monitor.setCursorPos(1, y + 1)
@@ -56,14 +64,17 @@ function updateDisplay()
         end
     end
 
-    -- Cleanup old jobs
+    -- Clear old jobs from memory
     for id, _ in pairs(startCounts) do
         if not activeIDs[id] then startCounts[id] = nil end
     end
 end
 
 while true do
-    -- Using pcall to prevent the script from stopping if the ME network reboots
-    pcall(updateDisplay)
+    -- pcall prevents "snapshot" errors or network hiccups from crashing the script
+    local success, err = pcall(updateDisplay)
+    if not success then
+        print("Data Syncing... " .. tostring(err))
+    end
     sleep(1)
 end
