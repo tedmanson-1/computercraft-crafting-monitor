@@ -1,86 +1,58 @@
-local bridge = peripheral.wrap("bottom")
+-- Configuration
+local BRIDGE_NAME = "meBridge"
+local REFRESH_RATE = 2 -- Seconds between updates
+
+local bridge = peripheral.find(BRIDGE_NAME)
 local monitor = peripheral.find("monitor")
-monitor.setTextScale(0.5)
+local termObj = monitor or term
 
-local startCounts = {} -- Store initial counts in memory
-
-local function findValue(tbl, key)
-    if type(tbl) ~= "table" then return nil end
-    if tbl[key] then return tbl[key] end
-    for _, v in pairs(tbl) do
-        local res = findValue(v, key)
-        if res then return res end
-    end
-    return nil
+if not bridge then
+    error("ME Bridge not found! Is it connected to the network?")
 end
 
-function drawProgressBar(y, current, total)
-    local width = 15
-    -- Ensure total is never 0 to avoid math errors
-    if not total or total <= 0 then total = current end
-    
-    -- AE2 counts DOWN. Progress = (Total - Remaining) / Total
-    local percent = math.max(0, math.min(1, (total - current) / total))
-    local filled = math.floor(percent * width)
-    
-    monitor.setCursorPos(1, y)
-    monitor.setTextColor(colors.gray)
-    monitor.write("[")
-    monitor.setTextColor(colors.green)
-    monitor.write(string.rep("=", filled))
-    monitor.setTextColor(colors.black)
-    monitor.write(string.rep("-", width - filled))
-    monitor.setTextColor(colors.gray)
-    monitor.write("] " .. math.floor(percent * 100) .. "%")
+-- Function to safely get a readable name
+local function getReadableName(task)
+    -- In modern AP, task often contains the item data directly 
+    -- or nested under an 'item' key depending on the specific version.
+    return task.displayName or (task.item and task.item.displayName) or task.name or "Unknown Item"
 end
 
-function updateDisplay()
-    monitor.clear()
-    monitor.setCursorPos(1, 1)
-    monitor.setTextColor(colors.yellow)
-    monitor.write("--- AE2 Active Crafting ---")
+local function drawUI()
+    local tasks = bridge.getCraftingTasks()
     
-    local cpus = bridge.getCraftingCPUs()
-    local y = 3
-    local activeIDs = {}
+    termObj.clear()
+    termObj.setCursorPos(1, 1)
+    termObj.setTextColor(colors.yellow)
+    termObj.write("=== AE2 ACTIVE TASKS ===")
+    termObj.setTextColor(colors.white)
 
-    for i, cpu in ipairs(cpus) do
-        if cpu.isBusy and cpu.craftingJob then
-            local job = cpu.craftingJob
-            local name = findValue(job, "displayName") or "Unknown"
-            local currentQty = findValue(job, "count") or findValue(job, "amount") or 0
+    if #tasks == 0 then
+        termObj.setCursorPos(1, 3)
+        termObj.write("System Idle...")
+    else
+        for i, task in ipairs(tasks) do
+            if i > 10 then break end -- Prevent overflowing small screens
             
-            -- Stable ID using the Item Name + CPU Index
-            local jobID = name .. "_" .. i
-            activeIDs[jobID] = true
+            local label = getReadableName(task)
+            local amount = task.quantity or (task.item and task.item.amount) or 0
             
-            -- ONLY set the start count if we haven't seen this job before
-            if not startCounts[jobID] then
-                startCounts[jobID] = currentQty
-            end
-
-            -- Display: Blue Name, Green Count
-            monitor.setCursorPos(1, y)
-            monitor.setTextColor(colors.blue)
-            monitor.write(name)
-            monitor.setTextColor(colors.white)
-            monitor.write(": ")
-            monitor.setTextColor(colors.green)
-            monitor.write(currentQty .. " Crafting")
-            
-			y = y + 3
-        end
-    end
-
-    -- Cleanup: Remove jobs from memory that are no longer crafting
-    for id, _ in pairs(startCounts) do
-        if not activeIDs[id] then
-            startCounts[id] = nil
+            termObj.setCursorPos(1, i + 2)
+            -- Cleanly format: "128x Iron Ingot"
+            termObj.write(string.format("%dx %s", amount, label))
         end
     end
 end
+
+-- Main Loop
+term.clear()
+print("Monitoring AE2... (Outputting to " .. (monitor and "Monitor" or "Terminal") .. ")")
 
 while true do
-    pcall(updateDisplay)
-    sleep(1)
+    local ok, err = pcall(drawUI)
+    if not ok then
+        termObj.clear()
+        termObj.setCursorPos(1,1)
+        termObj.write("Error: " .. tostring(err))
+    end
+    sleep(REFRESH_RATE)
 end
